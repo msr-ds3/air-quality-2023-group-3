@@ -1,0 +1,9 @@
+```{r }
+library(tidyverse)
+
+
+city_day_dta <- read_csv("city_day_agg_cleaned.csv.gz")
+
+country_day_data <- read_csv("country_day_agg_cleaned.csv.gz")
+
+```
