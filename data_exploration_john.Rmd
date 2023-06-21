@@ -1,0 +1,64 @@
+---
+title: "Data Exporation"
+output: html_document
+date: "2023-06-21"
+---
+
+```{r Setup}
+
+library(tidyverse)
+library(here)
+library(lubridate)
+here()
+city_day_data <- read_csv("city_day_agg_cleaned.csv.gz")
+
+country_day_data <- read_csv("country_day_agg_cleaned.csv.gz")
+```
+
+Looking at the data we have two tables with the following features:
+
+#### city_day_data (Features)
+
+- country
+- countryCode
+- city_id
+- date
+- parameter
+- mean
+
+#### country_data_data (Features)
+
+- countryCode
+- date
+- parameter
+- mean
+
+```{r Data Preparation}
+
+wider_city_data <- city_day_data %>% 
+  pivot_wider(names_from=parameter, values_from=mean) %>% 
+  select(-c(no2, o3)) %>% 
+  na.omit() %>% 
+  rename(city_average_pm25=pm25)
+
+wider_country_data <- country_day_data %>% 
+  pivot_wider(names_from=parameter, values_from=mean) %>% 
+  select(-c(no2, o3)) %>% 
+  na.omit() %>% 
+  rename(country_average_pm25=pm25)
+
+wider_city_data %>% 
+  left_join(wider_country_data, by=c("countryCode", "date")) %>% 
+  mutate(year_period=as.factor(ifelse(year(date) < 2020, 0, 1))) %>% 
+  group_by(countryCode, city_id, year_period) %>% 
+  summarize(mean_pm25=mean(city_average_pm25)) %>% 
+  ggplot(aes(x=mean_pm25, color=year_period)) +
+  geom_density() + 
+  geom_vline(aes(xintercept = median(mean_pm25), color=year_period))
+  
+  
+  
+
+
+```
+
