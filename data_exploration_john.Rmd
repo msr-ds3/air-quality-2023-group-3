@@ -9,10 +9,14 @@ date: "2023-06-21"
 library(tidyverse)
 library(here)
 library(lubridate)
-here()
+library(maps)
+library(modelr)
+
 city_day_data <- read_csv("city_day_agg_cleaned.csv.gz")
 
 country_day_data <- read_csv("country_day_agg_cleaned.csv.gz")
+
+city_loc_data <- read_csv("openaq_cities.csv")
 ```
 
 Looking at the data we have two tables with the following features:
@@ -50,21 +54,18 @@ wider_country_data <- country_day_data %>%
 combined_city_country <- wider_city_data %>% 
   left_join(wider_country_data, by=c("countryCode", "date"))
 
-countries_2020 <- combined_city_country %>%  
-  filter(month(date) >= 1, month(date) <= 5, year(date) == 2020) %>% 
-  group_by(countryCode, city_id) #861 groups
+data_from_period_3_year <- combined_city_country %>% 
+  filter(year(date) < 2020, month(date) >= 1, month(date) <= 5) %>% 
+  group_by(countryCode, city_id) %>% 
+  summarize(average_pm25_3_year=mean(city_average_pm25)) 
+  
+data_from_2020 <- combined_city_country %>% 
+  filter(year(date) == 2020, month(date) >= 1, month(date) <= 5) %>% 
+  group_by(countryCode, city_id) %>% 
+  summarize(average_pm25_2020=mean(city_average_pm25)) 
 
-countries_3_year <- combined_city_country %>%  
-  filter(month(date) >= 1, month(date) <= 5, year(date) < 2020) %>% 
-  distinct(countryCode, city_id) #900 groups
-
-cities_2020 <- combined_city_country %>%  
-  filter(month(date) >= 1, month(date) <= 5, year(date) == 2020)
-
-cities_3_year <- combined_city_country %>%  
-  filter(month(date) >= 1, month(date) <= 5, year(date) < 2020)
-
-common_countries <- intersect(countries_3_year, countries_2020)
+combined_averages <- data_from_2020 %>% 
+  inner_join(data_from_period_3_year, by=c("city_id", "countryCode"))
 
 combined_city_country %>%  
   filter(month(date) >= 1, month(date) <= 5, countryCode %in% common_countries$countryCode) %>% 
@@ -77,11 +78,46 @@ combined_city_country %>%
   geom_density(aes(fill=year_period, alpha=0.5)) +
   geom_vline(aes(xintercept = median_2020, color=year_period))
 
-```
-### Possible Modifications
+combined_averages %>% 
+  pivot_longer(cols=c("average_pm25_2020", "average_pm25_3_year"), values_to="average_pm25") %>% 
+  group_by(name) %>% 
+  mutate(median=median(average_pm25)) %>% 
+  ggplot(aes(x=average_pm25, color=name)) + 
+  geom_density(aes(fill=name, alpha=0.5)) +
+  geom_vline(aes(xintercept = median, color=name))
 
-- Only keep countries and cities that are common in both 2020 and 2017-2020
+```
 
 ### Map graph
 
+```{r map}
+
+rel_changes <- combined_averages %>% 
+  mutate(rel_change = ((average_pm25_2020 - average_pm25_3_year)/average_pm25_3_year)*100) %>% 
+  left_join(city_loc_data) %>% 
+  filter(rel_change > -30, rel_change < 30)
+
+max(rel_changes$rel_change)
+min(rel_changes$rel_change)
+
+ggplot(map_data("world"), aes(long, lat)) + 
+  geom_polygon(aes(group=group), fill="lightgray", color="white") +
+  geom_point(data=rel_changes, aes(x=Lon,y=Lat, color=rel_change), shape=1) +
+  coord_cartesian(xlim=c(-120, 125), ylim=c(-50,75))
+```
+
+### Model creation 
+
+```{r Model Creation}
+
+country_locs <- read_csv("countries_codes_and_coordinates.csv")
+
+country_data <- combined_city_country %>% 
+  left_join(country_locs) %>% 
+  group_by(countryCode, date) %>% 
+  summarize(pm25=country_average_pm25[1])
+
+lm <- lm( ,data=country_data)
+
+```
 
