@@ -47,8 +47,27 @@ wider_country_data <- country_day_data %>%
   na.omit() %>% 
   rename(country_average_pm25=pm25)
 
-wider_city_data %>% 
-  left_join(wider_country_data, by=c("countryCode", "date")) %>% 
+combined_city_country <- wider_city_data %>% 
+  left_join(wider_country_data, by=c("countryCode", "date"))
+
+countries_2020 <- combined_city_country %>%  
+  filter(month(date) >= 1, month(date) <= 5, year(date) == 2020) %>% 
+  group_by(countryCode, city_id) #861 groups
+
+countries_3_year <- combined_city_country %>%  
+  filter(month(date) >= 1, month(date) <= 5, year(date) < 2020) %>% 
+  distinct(countryCode, city_id) #900 groups
+
+cities_2020 <- combined_city_country %>%  
+  filter(month(date) >= 1, month(date) <= 5, year(date) == 2020)
+
+cities_3_year <- combined_city_country %>%  
+  filter(month(date) >= 1, month(date) <= 5, year(date) < 2020)
+
+common_countries <- intersect(countries_3_year, countries_2020)
+
+combined_city_country %>%  
+  filter(month(date) >= 1, month(date) <= 5, countryCode %in% common_countries$countryCode) %>% 
   mutate(year_period=as.factor(ifelse(year(date) < 2020, "3-year", "2020"))) %>% 
   group_by(countryCode, city_id, year_period) %>% 
   summarize(mean_pm25=mean(city_average_pm25)) %>% 
@@ -57,10 +76,12 @@ wider_city_data %>%
   ggplot(aes(x=mean_pm25, color=year_period)) + 
   geom_density(aes(fill=year_period, alpha=0.5)) +
   geom_vline(aes(xintercept = median_2020, color=year_period))
-  
-  
-  
-
 
 ```
+### Possible Modifications
+
+- Only keep countries and cities that are common in both 2020 and 2017-2020
+
+### Map graph
+
 

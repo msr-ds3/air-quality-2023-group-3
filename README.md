@@ -1,4 +1,4 @@
-# air-quality-2023-group-3
+#air-quality-2023-group-3
 
 
 ## Description
@@ -21,3 +21,7 @@ This week covers replications and extensions of [this article](https://www.pnas.
 4. From here think about extensions to the article. Each group will probably come up with different questions to ask of the data. Write down the questions your group is interested in along with a plan for how you can tackle them with the data you have. 
 
 6. Write one Rmarkdown notebook file that contains all of your results, including the replications and your extension. Commit the source code and rendered notebook to your group's Github repository, with a README that explains what each file does.
+
+## Download city location data command
+
+curl -O https://raw.githubusercontent.com/msr-ds3/coursework/master/week4/project/data/openaq_cities.csv
