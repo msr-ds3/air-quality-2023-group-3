@@ -17,6 +17,10 @@ city_day_data <- read_csv("city_day_agg_cleaned.csv.gz")
 country_day_data <- read_csv("country_day_agg_cleaned.csv.gz")
 
 city_loc_data <- read_csv("openaq_cities.csv")
+
+city_pop_dens <- read_csv("pop_dens_cities.csv") %>% 
+  select(city_id, countryCode, mean) %>% 
+  rename(pop_density_mean=mean)
 ```
 
 Looking at the data we have two tables with the following features:
@@ -36,6 +40,10 @@ Looking at the data we have two tables with the following features:
 - date
 - parameter
 - mean
+
+### Notes
+
+POPULATION WEIGHTED MEAN!
 
 ```{r Data Preparation}
 
@@ -97,6 +105,12 @@ rel_changes <- combined_averages %>%
   left_join(city_loc_data) %>% 
   filter(rel_change > -30, rel_change < 30)
 
+combined_averages %>% 
+  mutate(rel_change = ((average_pm25_2020 - average_pm25_3_year)/average_pm25_3_year)*100) %>% 
+  left_join(city_loc_data) %>% 
+  ggplot(aes(rel_change)) +
+  geom_histogram()
+
 max(rel_changes$rel_change)
 min(rel_changes$rel_change)
 
@@ -110,14 +124,39 @@ ggplot(map_data("world"), aes(long, lat)) +
 
 ```{r Model Creation}
 
-country_locs <- read_csv("countries_codes_and_coordinates.csv")
+country_locs <- read_csv("countries_codes_and_coordinates.csv") %>% 
+  rename(lat="Latitude (average)", long="Longitude (average)")
 
-country_data <- combined_city_country %>% 
-  left_join(country_locs) %>% 
+country_data <- wider_country_data %>% 
+  inner_join(country_locs, by = c("countryCode"="Alpha-3 code")) %>% 
   group_by(countryCode, date) %>% 
-  summarize(pm25=country_average_pm25[1])
+  summarize(pm25=country_average_pm25[1], lat=lat[1], long=long[1]) %>% 
+  mutate(month=as.factor(month(date, label=TRUE)), is_weekend=weekdays(date) %in% c("Saturday", "Sunday"))
 
-lm <- lm( ,data=country_data)
+country_data_2020 <- country_data %>% 
+  filter(year(date) == 2020, !(countryCode %in% c("AUT", "GRC", "HUN", "ISL", "ITA")))
+
+country_data_17_19 <- country_data %>% 
+  filter(year(date) < 2020)
+
+lm <- lm(pm25 ~ lat*month +long*month + is_weekend + countryCode,data=country_data_17_19)
+
+summary(lm)
+predictions <- country_data_2020 %>% 
+  add_predictions(lm)
+
+1-mean((predictions$pm25 -predictions$pred)^2)/var(predictions$pm25)
+sqrt(mean((predictions$pm25 -predictions$pred)^2))
+
+predictions %>% 
+  group_by(countryCode) %>% 
+  summarize(pred_mean = mean(pred), actual_mean = mean(pm25)) %>% 
+  mutate(abs_diff=pred_mean-actual_mean, rel_change=(actual_mean-pred_mean)/actual_mean * 100) %>% 
+  filter(rel_change > -150) %>% 
+  ggplot(aes(x=countryCode, y=rel_change, color=rel_change)) +
+  geom_point() +
+  geom_hline(yintercept=0, linetype="dotdash") +
+  coord_flip()
 
 ```
 
