@@ -21,6 +21,10 @@ city_loc_data <- read_csv("openaq_cities.csv")
 city_pop_dens <- read_csv("pop_dens_cities.csv") %>% 
   select(city_id, countryCode, mean) %>% 
   rename(pop_density_mean=mean)
+
+country_pop_dens <- read_csv("pop_dens_country.csv") %>% 
+  select(city_id, countryCode, mean) %>% 
+  rename(pop_density_mean=mean)
 ```
 
 Looking at the data we have two tables with the following features:
@@ -125,7 +129,7 @@ ggplot(map_data("world"), aes(long, lat)) +
 ```{r Model Creation}
 
 country_locs <- read_csv("countries_codes_and_coordinates.csv") %>% 
-  rename(lat="Latitude (average)", long="Longitude (average)")
+  rename(lat="Latitude (average)", long="Longitude (average)", countryCode="Alpha-3 code")
 
 country_data <- wider_country_data %>% 
   inner_join(country_locs, by = c("countryCode"="Alpha-3 code")) %>% 
@@ -139,21 +143,23 @@ country_data_2020 <- country_data %>%
 country_data_17_19 <- country_data %>% 
   filter(year(date) < 2020)
 
-lm <- lm(pm25 ~ lat*month +long*month + is_weekend + countryCode,data=country_data_17_19)
-
+lm <- lm(pm25 ~ lat*month +long*month + is_weekend*lat + is_weekend*long + countryCode,data=country_data_17_19)
+preds <- predict(lm, newdata = country_data_2020, se.fit = T)
 summary(lm)
-predictions <- country_data_2020 %>% 
-  add_predictions(lm)
+country_data_2020$pred = preds$fit
+country_data_2020$se = preds$se.fit
 
-1-mean((predictions$pm25 -predictions$pred)^2)/var(predictions$pm25)
-sqrt(mean((predictions$pm25 -predictions$pred)^2))
+1-mean((country_data_2020$pm25 -country_data_2020$pred)^2)/var(country_data_2020$pm25)
+sqrt(mean((country_data_2020$pm25 -country_data_2020$pred)^2))
 
-predictions %>% 
+country_data_2020 %>% 
   group_by(countryCode) %>% 
-  summarize(pred_mean = mean(pred), actual_mean = mean(pm25)) %>% 
+  summarize(pred_mean = mean(pred), actual_mean = mean(pm25), mean_se=mean(se)*1.96) %>% 
   mutate(abs_diff=pred_mean-actual_mean, rel_change=(actual_mean-pred_mean)/actual_mean * 100) %>% 
   filter(rel_change > -150) %>% 
-  ggplot(aes(x=countryCode, y=rel_change, color=rel_change)) +
+  left_join(country_locs, by="countryCode") %>% 
+  ggplot(aes(x=Country, y=rel_change, color=rel_change)) +
+  geom_errorbar(aes(ymin=rel_change-1.96*mean_se, ymax=rel_change+1.96*mean_se)) +
   geom_point() +
   geom_hline(yintercept=0, linetype="dotdash") +
   coord_flip()
